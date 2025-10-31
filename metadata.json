@@ -1,0 +1,5 @@
+{
+  "name": "AI SEO Link Assistant",
+  "description": "An intelligent tool to automate the process of adding internal and external links to your WordPress posts, based on SEO best practices. It fetches content, uses AI to analyze and generate a linking strategy, enhances the post, and updates it directly on your WordPress site.",
+  "requestFramePermissions": []
+}

@@ -1,38 +1,27 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getJob } from '../../../services/dbService';
+import { sql } from '@vercel/postgres';
+import { type VercelRequest, type VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        return res.status(200).end();
+  const { jobId } = req.query;
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
+    const { rows } = await sql`
+      SELECT id, status, meta, created_at FROM jobs WHERE id = ${jobId as string}
+    `;
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
     }
-    res.setHeader('Access-Control-Allow-Origin', '*');
 
-    if (req.method !== 'GET') {
-        res.setHeader('Allow', ['GET']);
-        return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
-    }
-
-    try {
-        const { jobId } = req.query;
-
-        if (!jobId || typeof jobId !== 'string') {
-            return res.status(400).json({ error: 'Missing or invalid jobId in request query' });
-        }
-
-        const job = await getJob(jobId);
-
-        if (!job) {
-            return res.status(404).json({ error: 'Job not found' });
-        }
-
-        res.status(200).json(job);
-
-    } catch (error) {
-        console.error(error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        res.status(500).json({ error: errorMessage });
-    }
+    // Return the raw job row JSON
+    return res.status(200).json(rows[0]);
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return res.status(500).json({ error: message });
+  }
 }

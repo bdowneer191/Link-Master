@@ -1,60 +1,122 @@
+import { useState, type FormEvent, useRef } from 'react';
 
-import React, { useState } from 'react';
-import { SetupStep } from './components/SetupStep';
-import { ProcessingStep } from './components/ProcessingStep';
-import type { Credentials, PostURL } from './types';
-import { LogoIcon } from './components/icons';
+// This matches the DB row from /api/jobs/[jobId]/status
+interface JobStatus {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  meta: any;
+  created_at: string;
+}
 
+function App() {
+  const [html, setHtml] = useState('<p>This is a test.</p><a href="#">Link 1</a><a href="#">Link 2</a>');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-const App: React.FC = () => {
-  const [step, setStep] = useState<'setup' | 'processing'>('setup');
-  const [credentials, setCredentials] = useState<Credentials | null>(null);
-  const [postUrls, setPostUrls] = useState<PostURL[]>([]);
+  // Use a ref to store the interval ID
+  const intervalId = useRef<NodeJS.Timeout | null>(null);
 
-  const handleStartProcessing = (creds: Credentials, urls: string[]) => {
-    setCredentials(creds);
-    setPostUrls(urls.map(url => ({ url, status: 'pending', message: 'Waiting...' })));
-    setStep('processing');
+  const pollJobStatus = (id: string) => {
+    // Clear any existing pollers
+    if (intervalId.current) {
+      clearInterval(intervalId.current);
+    }
+
+    intervalId.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs/${id}/status`);
+        if (!res.ok) throw new Error('Failed to fetch status');
+        
+        const data: JobStatus = await res.json();
+        setJobStatus(data);
+
+        // Stop polling if job is done
+        if (data.status === 'succeeded' || data.status === 'failed') {
+          if (intervalId.current) clearInterval(intervalId.current);
+          setJobId(null); // Reset for new job
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        setError(message);
+        if (intervalId.current) clearInterval(intervalId.current);
+      }
+    }, 2000); // Poll every 2 seconds
   };
-  
-  const handleReset = () => {
-    setCredentials(null);
-    setPostUrls([]);
-    setStep('setup');
-  }
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (jobId) return; // Prevent multiple submissions
+
+    setJobStatus(null);
+    setError(null);
+
+    try {
+      // 1. POST HTML to create job
+      const res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html_content: html }),
+      });
+
+      if (!res.ok) throw new Error('Failed to create job');
+      
+      const { jobId: newJobId } = await res.json();
+      setJobId(newJobId);
+      setJobStatus({ // Set an initial "queued" state immediately
+        id: newJobId,
+        status: 'queued',
+        meta: null,
+        created_at: new Date().toISOString()
+      });
+      
+      // 2. Start polling for status
+      pollJobStatus(newJobId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(message);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-200 font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-4xl">
-        <header className="text-center mb-8">
-            <div className="flex items-center justify-center gap-4 mb-4">
-                <LogoIcon className="h-12 w-12 text-cyan-400" />
-                <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-500">
-                    AI SEO Link Assistant
-                </h1>
-            </div>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-                Automate internal and external link building for your WordPress posts. Provide your site details, paste post URLs, and let AI enhance your content.
-            </p>
-        </header>
+    <div style={{ fontFamily: 'sans-serif', margin: '2rem', maxWidth: '800px' }}>
+      <h1>Link Master - Vertical Slice Test</h1>
+      <form onSubmit={handleSubmit}>
+        <h3>Paste HTML to Process:</h3>
+        <textarea
+          value={html}
+          onChange={(e) => setHtml(e.target.value)}
+          rows={10}
+          cols={80}
+          style={{ display: 'block', width: '100%', padding: '8px' }}
+        />
+        <button type="submit" disabled={!!jobId} style={{ marginTop: '1rem', padding: '10px 15px' }}>
+          {jobId ? 'Processing...' : 'Submit Job'}
+        </button>
+      </form>
 
-        <main className="bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-2xl shadow-black/20 ring-1 ring-white/10 p-6 sm:p-8">
-          {step === 'setup' && <SetupStep onStart={handleStartProcessing} />}
-          {step === 'processing' && credentials && (
-            <ProcessingStep
-              credentials={credentials}
-              initialUrls={postUrls}
-              onComplete={handleReset}
-            />
+      {/* Realtime Status Display */}
+      {jobStatus && (
+        <div style={{ marginTop: '2rem' }}>
+          <h3>Job Status</h3>
+          <p>Job ID: {jobStatus.id}</p>
+          <p>Status: <strong style={{ textTransform: 'uppercase' }}>{jobStatus.status}</strong></p>
+          
+          {/* Display raw JSON result */}
+          {jobStatus.meta && (
+            <>
+              <h4>Result:</h4>
+              <pre style={{ background: '#f4f4f4', padding: '1rem', borderRadius: '4px', overflowX: 'auto' }}>
+                {JSON.stringify(jobStatus.meta, null, 2)}
+              </pre>
+            </>
           )}
-        </main>
-        
-        <footer className="text-center mt-8 text-sm text-gray-500">
-            <p>Powered by Gemini API</p>
-        </footer>
-      </div>
+        </div>
+      )}
+
+      {error && <p style={{ color: 'red', marginTop: '1rem' }}>Error: {error}</p>}
     </div>
   );
-};
+}
 
 export default App;

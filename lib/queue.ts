@@ -1,17 +1,20 @@
-// lib/queue.ts
+
 import { kv } from '@vercel/kv';
 
 const JOB_QUEUE_KEY = 'link_master_queue';
 
-// Enqueues a job ID [cite: 195]
+/**
+ * Enqueues a job ID by pushing it to the left of the list.
+ */
 export async function enqueueJob(jobId: string) {
   return await kv.lpush(JOB_QUEUE_KEY, jobId);
 }
 
-// Dequeues a job ID (blocking pop from the right)
-export async function dequeueJob() {
-  // Use brpop for a blocking pop, 0 timeout means wait forever
-  // This is how a worker "pulls" a job [cite: 200]
-  // Vercel KV supports this Redis command
-  return await kv.brpop(JOB_QUEUE_KEY, 0);
+/**
+ * Dequeues a job ID by popping from the right of the list.
+ * We use a simple non-blocking pop (rpop) for our cron-based worker.
+ * A blocking pop (brpop) would be used for a long-running worker.
+ */
+export async function dequeueJob(): Promise<string | null> {
+  return await kv.rpop(JOB_QUEUE_KEY);
 }

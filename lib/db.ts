@@ -1,13 +1,13 @@
-// lib/db.ts
+
 import { sql } from '@vercel/postgres';
 
 // Simplified Job model for our first slice
 export interface Job {
   id: string;
   created_at: string;
-  source_type: 'paste'; // Only 'paste' for this slice [cite: 184]
+  source_type: 'paste'; // Only 'paste' for this slice
   status: 'queued' | 'running' | 'succeeded' | 'failed';
-  html_content: string; // The raw HTML pasted by the user [cite: 195]
+  html_content: string; // The raw HTML pasted by the user
   meta: Record<string, any> | null; // To store AI results
 }
 
@@ -24,4 +24,5 @@ export async function createJobTable() {
       meta JSONB
     );
   `;
+  console.log('Table "jobs" created or already exists.');
 }

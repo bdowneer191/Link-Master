@@ -41,6 +41,7 @@ export const fetchAllPublishedPosts = async (credentials: Credentials): Promise<
 
         if (!response.ok) {
           if (response.status === 400) {
+            console.warn('WordPress pagination loop reached the end (400 Bad Request).');
             break;
           }
           const errorText = await response.text();

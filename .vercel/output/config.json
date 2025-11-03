@@ -22,6 +22,21 @@
       "src": "^/api/process-url$",
       "dest": "/api/process-url",
       "check": true
+    },
+    {
+      "src": "^/api/worker$",
+      "dest": "/api/worker",
+      "check": true
+    },
+    {
+      "src": "^/api/jobs/index$",
+      "dest": "/api/jobs/index",
+      "check": true
+    },
+    {
+      "src": "^/api/jobs(?:/([^/]+?))/status$",
+      "dest": "/api/jobs/[jobId]/status?jobId=$1",
+      "check": true
     }
   ],
   "overrides": {}

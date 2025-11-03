@@ -1,129 +1,127 @@
+// Overwrite components/ProcessingStep.tsx with this:
 
-import React, { useState, useEffect, useCallback } from 'react';
-import type { Credentials, PostURL } from '../types';
-import { useSeoWorkflow } from '../hooks/useSeoWorkflow';
-import { CheckCircleIcon, ClockIcon, ExclamationTriangleIcon, SparklesIcon, ArrowPathIcon } from './icons';
+import React from 'react';
+import { JobStatusResponse } from '../hooks/useSeoWorkflow';
+import { CheckCircleIcon, XCircleIcon } from './icons';
 
 interface ProcessingStepProps {
-  credentials: Credentials;
-  initialUrls: PostURL[];
-  onComplete: () => void;
+  onProcess: () => void;
+  jobStatus: JobStatusResponse | null;
+  isProcessing: boolean;
+  error: string | null;
 }
 
-const StatusIcon: React.FC<{ status: PostURL['status'] }> = ({ status }) => {
-  switch (status) {
-    case 'pending':
-      return <ClockIcon className="h-5 w-5 text-gray-500" />;
-    case 'processing':
-      return <ArrowPathIcon className="h-5 w-5 text-cyan-400 animate-spin" />;
-    case 'completed':
-      return <CheckCircleIcon className="h-5 w-5 text-green-400" />;
-    case 'error':
-      return <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />;
-    default:
-      return null;
-  }
-};
-
-export const ProcessingStep: React.FC<ProcessingStepProps> = ({ credentials, initialUrls, onComplete }) => {
-  const [urls, setUrls] = useState<PostURL[]>(initialUrls);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [isFinished, setIsFinished] = useState<boolean>(false);
-
-  const updateUrlStatus = useCallback((index: number, status: PostURL['status'], message: string) => {
-    setUrls(prev =>
-      prev.map((item, i) => (i === index ? { ...item, status, message } : item))
-    );
-  }, []);
-
-  const { processUrl, isLoading, log } = useSeoWorkflow(credentials);
-
-  useEffect(() => {
-    if (isProcessing && currentIndex < urls.length) {
-      const currentUrl = urls[currentIndex];
-      updateUrlStatus(currentIndex, 'processing', 'Starting enhancement...');
-
-      processUrl(currentUrl.url)
-        .then(result => {
-          updateUrlStatus(currentIndex, 'completed', result);
-          setCurrentIndex(prev => prev + 1);
-        })
-        .catch(error => {
-          updateUrlStatus(currentIndex, 'error', error.message || 'An unknown error occurred.');
-          setCurrentIndex(prev => prev + 1); // Move to the next one even on error
-        });
-    } else if (currentIndex >= urls.length && isProcessing) {
-      setIsProcessing(false);
-      setIsFinished(true);
+export const ProcessingStep: React.FC<ProcessingStepProps> = ({
+  onProcess,
+  jobStatus,
+  isProcessing,
+  error,
+}) => {
+  const getStatusMessage = () => {
+    // ... (This function remains unchanged, no need to copy it)
+    if (error && !isProcessing) {
+      return `Error: ${error}`;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, isProcessing, urls.length]);
-
-  const handleStart = () => {
-    setIsProcessing(true);
-    setCurrentIndex(0);
+    if (!isProcessing && !jobStatus) {
+      return 'Ready to process.';
+    }
+    if (jobStatus?.status === 'queued') {
+      return 'Job is queued...';
+    }
+    if (jobStatus?.status === 'running') {
+      return 'Processing... (Generating AI link plan)';
+    }
+    if (jobStatus?.status === 'succeeded') {
+      return 'Processing Complete! Link Plan generated.';
+    }
+    if (jobStatus?.status === 'failed') {
+      return `Job Failed: ${jobStatus.error || 'Unknown error'}`;
+    }
+    if (isProcessing && !jobStatus) {
+        return 'Starting...';
+    }
+    return 'Ready.';
   };
-  
+
+  // Helper to render the JSON plan
+  const renderResult = () => {
+    if (jobStatus?.status !== 'succeeded' || !jobStatus.result) {
+      return null;
+    }
+
+    // This is the new part
+    const { plan, originalHtml } = jobStatus.result;
+
+    if (plan && Array.isArray(plan)) {
+      return (
+        <div className="p-4 border rounded-md bg-white">
+          <h3 className="font-semibold text-gray-900">AI Link Plan:</h3>
+          {plan.length === 0 ? (
+            <p className="text-sm text-gray-600">
+              No internal linking opportunities found.
+            </p>
+          ) : (
+            <pre className="mt-2 p-2 bg-gray-100 rounded text-sm overflow-x-auto">
+              {JSON.stringify(plan, null, 2)}
+            </pre>
+          )}
+
+          {/* We will build the Diff Viewer here in the next step */}
+          <div className="mt-4">
+            <h4 className="font-semibold text-gray-900">Next Step:</h4>
+            <p className="text-sm text-gray-600">
+              Implement the "apply_edits" AI call and a visual diff viewer.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Fallback for the old "minimal slice" result
+    return (
+      <pre className="mt-2 p-2 bg-gray-100 rounded text-sm overflow-x-auto">
+        {JSON.stringify(jobStatus.result, null, 2)}
+      </pre>
+    );
+  };
+
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-cyan-300">Processing Posts</h2>
-        {!isProcessing && !isFinished && (
-          <button onClick={handleStart} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-md text-white font-medium transition-colors">
-            Start
-          </button>
-        )}
-        {isFinished && (
-          <button onClick={onComplete} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white font-medium transition-colors">
-            Start Over
-          </button>
-        )}
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold text-gray-900">
+        Step 3: Process & View Results
+      </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* URL List */}
-        <div className="space-y-2 pr-4 border-r border-gray-700/50">
-           <h3 className="text-lg font-medium text-gray-300 mb-3">URL Queue</h3>
-          {urls.map((item, index) => (
-            <div
-              key={index}
-              className={`p-3 rounded-lg flex items-start gap-3 text-sm transition-all duration-300 ${
-                currentIndex === index && isProcessing ? 'bg-cyan-900/50 scale-105 shadow-lg' : 'bg-gray-800'
-              }`}
-            >
-              <div className="pt-0.5"><StatusIcon status={item.status} /></div>
-              <div className="flex-1">
-                <p className="font-mono break-all text-gray-400">{item.url}</p>
-                <p className="text-gray-300 mt-1">{item.message}</p>
-              </div>
-            </div>
-          ))}
+      {/* Trigger Button */}
+      <button
+        onClick={onProcess}
+        disabled={isProcessing}
+        className="w-full px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+      >
+        {isProcessing ? 'Processing...' : 'Start Processing'}
+      </button>
+
+      {/* Status Display */}
+      {(isProcessing || jobStatus) && (
+        <div className="flex items-center space-x-2 p-4 bg-gray-50 rounded-lg">
+          {isProcessing && !jobStatus?.status && (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+          )}
+          {jobStatus?.status === 'running' && (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+          )}
+          {jobStatus?.status === 'succeeded' && (
+            <CheckCircleIcon className="h-5 w-5 text-green-500" />
+          )}
+          {(jobStatus?.status === 'failed' || (error && !isProcessing)) && (
+            <XCircleIcon className="h-5 w-5 text-red-500" />
+          )}
+          <p className="text-gray-700">{getStatusMessage()}</p>
         </div>
+      )}
 
-        {/* Live Log */}
-        <div className="flex flex-col">
-            <h3 className="text-lg font-medium text-gray-300 mb-3">Live Log</h3>
-            <div className="bg-black/30 rounded-lg p-4 h-96 overflow-y-auto font-mono text-sm space-y-2 flex-grow">
-            {!isProcessing && !isFinished && <p className="text-gray-500">Click 'Start' to begin processing...</p>}
-            {isFinished && <p className="text-green-400">All posts processed! ✨</p>}
-            {log ? (
-              <>
-                <p className={`whitespace-pre-wrap break-words ${
-                    log.type === 'error' ? 'text-red-400' : 
-                    log.type === 'success' ? 'text-green-400' : 'text-gray-400'
-                }`}>
-                    [{new Date().toLocaleTimeString()}] {log.postUrl ? `(${log.postUrl.substring(log.postUrl.lastIndexOf('/') + 1)})` : ''}
-                </p>
-                <p className="whitespace-pre-wrap break-words pl-4">{log.message}</p>
-              </>
-            ) : isProcessing ? (
-                <p className="text-gray-500">Processing... please wait.</p>
-            ): null}
-            </div>
-        </div>
-
-      </div>
+      {/* Result Display */}
+      {renderResult()}
     </div>
   );
 };

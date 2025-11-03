@@ -1,28 +1,34 @@
+// Overwrite lib/db.ts with this:
 
-import { sql } from '@vercel/postgres';
+import { Pool } from 'pg';
 
-// Simplified Job model for our first slice
-export interface Job {
-  id: string;
-  created_at: string;
-  source_type: 'paste'; // Only 'paste' for this slice
-  status: 'queued' | 'running' | 'succeeded' | 'failed';
-  html_content: string; // The raw HTML pasted by the user
-  meta: Record<string, any> | null; // To store AI results
+if (!process.env.POSTGRES_URL) {
+throw new Error('Missing POSTGRES_URL environment variable');
 }
 
-// Function to create the table if it doesn't exist.
-// We can run this once from a setup script or an admin endpoint.
-export async function createJobTable() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS jobs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      source_type VARCHAR(50) NOT NULL,
-      status VARCHAR(50) NOT NULL DEFAULT 'queued',
-      html_content TEXT,
-      meta JSONB
-    );
-  `;
-  console.log('Table "jobs" created or already exists.');
+// Vercel automatically provides the correct config from the POSTGRES_URL env var
+// when using 'pg'.
+const pool = new Pool({
+connectionString: process.env.POSTGRES_URL,
+ssl: {
+rejectUnauthorized: false, // Required for Vercel Postgres
+},
+});
+
+export const db = {
+query: (text: string, params: any[]) => pool.query(text, params),
+};
+
+// We will also need to define our Job types
+// You can move this to types.ts later
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface Job {
+id: string;
+created_at: string;
+status: JobStatus;
+source_type: 'paste' | 'sheet' | 'url';
+meta?: Record<string, any>;
+result?: Record<string, any>;
+error?: string;
 }

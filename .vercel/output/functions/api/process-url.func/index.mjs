@@ -35723,7 +35723,15 @@ var fetchAllPublishedPosts = async (credentials) => {
         "Authorization": getAuthHeader(credentials)
       }
     });
-    const posts = await handleResponse(response);
+    if (!response.ok) {
+      if (response.status === 400) {
+        console.warn("WordPress pagination loop reached the end (400 Bad Request).");
+        break;
+      }
+      const errorText = await response.text();
+      throw new Error(`WordPress API Error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    const posts = await response.json();
     if (posts.length === 0) {
       break;
     }

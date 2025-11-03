@@ -1,0 +1,23 @@
+import { describe, it, expect } from 'vitest';
+import { dbService } from './dbService';
+import type { Job } from '../lib/db';
+
+describe('dbService', () => {
+  it.skip('should create a job and then get it', async () => {
+    // Create a new job
+    const newJob = await dbService.createJob({
+      sourceType: 'paste',
+      meta: { test: 'test' },
+    });
+
+    expect(newJob).toBeDefined();
+    expect(newJob.id).toBeDefined();
+    expect(newJob.status).toBe('queued');
+    expect(newJob.source_type).toBe('paste');
+
+    // Get the job by its ID
+    const retrievedJob = await dbService.getJob(newJob.id);
+
+    expect(retrievedJob).toEqual(newJob);
+  });
+});

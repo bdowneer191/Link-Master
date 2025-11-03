@@ -33,17 +33,29 @@ export const fetchAllPublishedPosts = async (credentials: Credentials): Promise<
     const perPage = 100; // Max allowed by WordPress API is 100
 
     while (true) {
+      try {
         const response = await fetch(`${credentials.siteUrl}/wp-json/wp/v2/posts?per_page=${perPage}&page=${page}&status=publish&_fields=title,link`, {
-             headers: {
+            headers: {
                 'Authorization': getAuthHeader(credentials),
             },
         });
         const posts = await handleResponse(response);
+
+        // Primary Fix: Check for an empty array, which indicates the end of posts.
         if (posts.length === 0) {
             break;
         }
+
         allPosts = allPosts.concat(posts.map((p: any) => ({title: p.title.rendered, url: p.link})));
         page++;
+      } catch (error: any) { // Fallback: Catch the 400 error from the API for robustness.
+        if (error.message.includes('rest_post_invalid_page_number')) {
+          // This error also indicates the end of posts.
+          break;
+        }
+        // For all other errors, we should not silently continue.
+        throw error;
+      }
     }
     return allPosts;
 }
